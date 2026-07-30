@@ -104,6 +104,14 @@ export default function PdfCategory() {
 
   const activeTool = PDF_TOOLS.find(t => t.id === toolId) || null;
 
+  const setActiveTool = (tool) => {
+    if (tool) {
+      navigate(`/pdf/${tool.id}`);
+    } else {
+      navigate('/pdf');
+    }
+  };
+
   // Handle files selection from FileUpload component
   const handleFilesSelected = (files) => {
     setSelectedFiles(files);

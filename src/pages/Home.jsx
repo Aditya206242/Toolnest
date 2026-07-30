@@ -14,7 +14,8 @@ const TOOLS_CATALOG = [
     category: 'pdf',
     badge: 'Popular',
     icon: FileText,
-    href: '/pdf/pdf-compress'
+    href: '/pdf/pdf-compress',
+    keywords: ['compress', 'size', 'minimize', 'reduce', 'shrink', 'optimise', 'optimizer', 'small']
   },
   {
     id: 'pdf-merge',
@@ -22,7 +23,44 @@ const TOOLS_CATALOG = [
     desc: 'Merge multiple PDF documents into a single file.',
     category: 'pdf',
     icon: FileText,
-    href: '/pdf/pdf-merge'
+    href: '/pdf/pdf-merge',
+    keywords: ['merge', 'combine', 'join', 'concat', 'add', 'together']
+  },
+  {
+    id: 'pdf-split',
+    title: 'PDF Splitter',
+    desc: 'Extract pages or split a PDF into smaller files.',
+    category: 'pdf',
+    icon: FileText,
+    href: '/pdf/pdf-split',
+    keywords: ['split', 'cut', 'separate', 'divide', 'extract']
+  },
+  {
+    id: 'pdf-rotate',
+    title: 'Rotate PDF',
+    desc: 'Rotate PDF pages clockwise or counterclockwise.',
+    category: 'pdf',
+    icon: FileText,
+    href: '/pdf/pdf-rotate',
+    keywords: ['rotate', 'turn', 'flip', 'angle', 'orientation']
+  },
+  {
+    id: 'pdf-delete-pages',
+    title: 'Delete PDF Pages',
+    desc: 'Remove unwanted pages from a PDF document.',
+    category: 'pdf',
+    icon: FileText,
+    href: '/pdf/pdf-delete-pages',
+    keywords: ['delete', 'remove', 'erase', 'cut', 'clear']
+  },
+  {
+    id: 'pdf-extract-pages',
+    title: 'Extract PDF Pages',
+    desc: 'Extract selected pages into a new PDF file.',
+    category: 'pdf',
+    icon: FileText,
+    href: '/pdf/pdf-extract-pages',
+    keywords: ['extract', 'get', 'pull', 'separate', 'select']
   },
   {
     id: 'image-compress',
@@ -31,7 +69,82 @@ const TOOLS_CATALOG = [
     category: 'image',
     badge: 'Hot',
     icon: Image,
-    href: '/image/image-compress'
+    href: '/image/image-compress',
+    keywords: ['compress', 'size', 'optimize', 'optimise', 'shrink', 'minimize', 'reduce']
+  },
+  {
+    id: 'image-resize',
+    title: 'Resize Image',
+    desc: 'Resize images by pixel or percentage dimensions.',
+    category: 'image',
+    icon: Image,
+    href: '/image/image-resize',
+    keywords: ['resize', 'dimensions', 'width', 'height', 'scale', 'pixels']
+  },
+  {
+    id: 'image-crop',
+    title: 'Crop Image',
+    desc: 'Trim image boundaries with an interactive crop box.',
+    category: 'image',
+    icon: Image,
+    href: '/image/image-crop',
+    keywords: ['crop', 'cut', 'trim', 'area', 'frame']
+  },
+  {
+    id: 'image-convert',
+    title: 'Convert Image',
+    desc: 'Convert images between JPG, PNG, WEBP, and AVIF.',
+    category: 'image',
+    icon: Image,
+    href: '/image/image-convert',
+    keywords: ['convert', 'format', 'png', 'jpg', 'webp', 'avif', 'jpeg']
+  },
+  {
+    id: 'image-rotate',
+    title: 'Rotate Image',
+    desc: 'Rotate or flip images locally in the browser.',
+    category: 'image',
+    icon: Image,
+    href: '/image/image-rotate',
+    keywords: ['rotate', 'flip', 'turn', 'mirror']
+  },
+  {
+    id: 'image-watermark',
+    title: 'Watermark Image',
+    desc: 'Add text or logo watermarks to your images.',
+    category: 'image',
+    icon: Image,
+    href: '/image/image-watermark',
+    keywords: ['watermark', 'text', 'logo', 'sign', 'stamp', 'overlay']
+  },
+  {
+    id: 'image-remove-bg',
+    title: 'Remove Background',
+    desc: 'Erase image backgrounds and isolate subjects.',
+    category: 'image',
+    badge: 'AI Powered',
+    icon: Image,
+    href: '/image/image-remove-bg',
+    keywords: ['remove', 'bg', 'background', 'erase', 'clear', 'transparent', 'isolate']
+  },
+  {
+    id: 'image-ai-upscale',
+    title: 'AI Upscale',
+    desc: 'Upscale blurry images up to 4x while preserving quality.',
+    category: 'image',
+    badge: 'Premium',
+    icon: Image,
+    href: '/image/image-ai-upscale',
+    keywords: ['upscale', 'ai', 'enlarge', 'resize', 'clearer', 'enhance', 'resolution', 'blurry']
+  },
+  {
+    id: 'image-metadata',
+    title: 'Image Metadata',
+    desc: 'View and strip EXIF metadata from images.',
+    category: 'image',
+    icon: Image,
+    href: '/image/image-metadata',
+    keywords: ['metadata', 'exif', 'info', 'details', 'strip', 'clean', 'gps', 'camera']
   },
   {
     id: 'svg-to-jsx',
@@ -39,7 +152,8 @@ const TOOLS_CATALOG = [
     desc: 'Transform raw SVG paths into React/JSX functional components.',
     category: 'developer',
     icon: Code,
-    href: '#dev'
+    href: '#dev',
+    keywords: ['svg', 'jsx', 'react', 'code', 'convert', 'transform', 'component']
   },
   {
     id: 'jwt-decoder',
@@ -47,7 +161,8 @@ const TOOLS_CATALOG = [
     desc: 'Verify and decode JSON Web Tokens locally in your browser.',
     category: 'developer',
     icon: Code,
-    href: '#dev'
+    href: '#dev',
+    keywords: ['jwt', 'token', 'decode', 'decrypt', 'parse', 'verify', 'json']
   },
   {
     id: 'adsense-calculator',
@@ -56,7 +171,8 @@ const TOOLS_CATALOG = [
     category: 'calculators',
     badge: 'Interactive',
     icon: Percent,
-    href: '#calculator'
+    href: '#calculator',
+    keywords: ['rpm', 'earnings', 'calculator', 'adsense', 'ad', 'revenue', 'money']
   },
   {
     id: 'freelance-rate',
@@ -64,7 +180,8 @@ const TOOLS_CATALOG = [
     desc: 'Calculate your ideal hourly and project rates based on expenses.',
     category: 'calculators',
     icon: Percent,
-    href: '#calculator'
+    href: '#calculator',
+    keywords: ['hourly', 'freelance', 'rate', 'calculator', 'price', 'salary', 'expenses']
   },
   {
     id: 'regex-tester',
@@ -72,13 +189,16 @@ const TOOLS_CATALOG = [
     desc: 'Write, debug, and test regular expressions with visual matching.',
     category: 'developer',
     icon: Code,
-    href: '#dev'
+    href: '#dev',
+    keywords: ['regex', 'regexp', 'test', 'match', 'expression', 'pattern']
   }
 ];
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState('all');
+  const [activeCategory, setActiveCategory] = useState('pdf');
+
+  const VISIBLE_CATEGORIES = ['pdf', 'image', 'developer'];
 
   // AdSense Calculator State
   const [pageViews, setPageViews] = useState(50000);
@@ -86,11 +206,32 @@ export default function Home() {
 
   // Filter tools based on search and category
   const filteredTools = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    
     return TOOLS_CATALOG.filter(tool => {
-      const matchesSearch = tool.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            tool.desc.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory = activeCategory === 'all' || tool.category === activeCategory;
-      return matchesSearch && matchesCategory;
+      // 1. Verify category match (if query is not empty, ignore category filter to allow searching everything!)
+      const matchesCategory = VISIBLE_CATEGORIES.includes(tool.category) &&
+        (query ? true : tool.category === activeCategory);
+        
+      if (!matchesCategory) return false;
+      
+      // 2. If no query, return true (matches category filter)
+      if (!query) return true;
+      
+      // 3. Match individual words of search query in a fuzzy manner
+      const searchWords = query.split(/\s+/).filter(Boolean);
+      const targetText = `${tool.title} ${tool.desc} ${(tool.keywords || []).join(' ')}`.toLowerCase();
+      
+      return searchWords.every(word => {
+        // Expand synonyms
+        if (word === 'bg') {
+          return targetText.includes('bg') || targetText.includes('background');
+        }
+        if (word === 'background') {
+          return targetText.includes('bg') || targetText.includes('background');
+        }
+        return targetText.includes(word);
+      });
     });
   }, [searchQuery, activeCategory]);
 
@@ -187,11 +328,9 @@ export default function Home() {
       <section className="pb-16">
         <div className="flex flex-wrap justify-center gap-2 mb-10">
           {[
-            { id: 'all', label: 'All Tools' },
             { id: 'pdf', label: 'PDF Tools' },
             { id: 'image', label: 'Image Tools' },
-            { id: 'developer', label: 'Dev Tools' },
-            { id: 'calculators', label: 'Calculators' }
+            { id: 'developer', label: 'Dev Tools' }
           ].map(cat => (
             <button
               key={cat.id}

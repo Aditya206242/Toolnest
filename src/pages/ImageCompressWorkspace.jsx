@@ -4,7 +4,7 @@ import JSZip from 'jszip';
 import {
   ArrowLeft, Sliders, CheckCircle, AlertTriangle, Play, Sparkles,
   Download, FileImage, Layers, UploadCloud, X,
-  Maximize2, Minimize2, Move, RefreshCw, ZoomIn, ZoomOut
+  Maximize2, Minimize2, Move, RefreshCw, ZoomIn, ZoomOut, Minus, Plus, RotateCw
 } from 'lucide-react';
 import ImageUpload from '../components/ImageUpload';
 import ImageCompareSlider from '../components/ImageCompareSlider';
@@ -80,7 +80,79 @@ export default function ImageCompressWorkspace({ onBack }) {
   const [colorSpace, setColorSpace] = useState('srgb');
   const [sharpenAmount, setSharpenAmount] = useState(0);
   const [blurAmount, setBlurAmount] = useState(0);
+  
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Squoosh interface clone state extensions
+  const [resizeMethod, setResizeMethod] = useState('Lanczos3');
+  const [resizePreset, setResizePreset] = useState('100%');
+  const [reducePaletteEnabled, setReducePaletteEnabled] = useState(false);
+  const [colorsCount, setColorsCount] = useState(256);
+  const [rotation, setRotation] = useState(0);
+
+  const handleRotate = () => {
+    setRotation(prev => (prev + 90) % 360);
+  };
+
+  const handleResizePresetChange = (presetValue) => {
+    setResizePreset(presetValue);
+    const focusedImg = imagesQueue.find(img => img.id === focusedImageId) || imagesQueue[0];
+    if (focusedImg && focusedImg.imgElement) {
+      const originalW = focusedImg.imgElement.naturalWidth;
+      const originalH = focusedImg.imgElement.naturalHeight;
+      if (presetValue === '100%') {
+        setResizeWidth(originalW.toString());
+        setResizeHeight(originalH.toString());
+      } else if (presetValue === '70%') {
+        setResizeWidth(Math.round(originalW * 0.7).toString());
+        setResizeHeight(Math.round(originalH * 0.7).toString());
+      } else if (presetValue === '50%') {
+        setResizeWidth(Math.round(originalW * 0.5).toString());
+        setResizeHeight(Math.round(originalH * 0.5).toString());
+      } else if (presetValue === '25%') {
+        setResizeWidth(Math.round(originalW * 0.25).toString());
+        setResizeHeight(Math.round(originalH * 0.25).toString());
+      }
+    }
+  };
+
+  const handleDownloadImage = async (imgId) => {
+    const item = imagesQueue.find(img => img.id === imgId);
+    if (!item) return;
+    setIsProcessing(true);
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    try {
+      const isBackendNeeded = format === 'avif' || format === 'auto';
+      let downloadBlobTarget;
+
+      if (isBackendNeeded) {
+        downloadBlobTarget = await compressOnBackend(item.file, quality, format, lossless);
+      } else {
+        const details = compressedDetails[item.id];
+        if (!details || !details.blob) throw new Error('Processed buffer not found.');
+        downloadBlobTarget = details.blob;
+      }
+
+      const ext = format === 'jpeg' ? 'jpg' : format;
+      const nameWithoutExt = item.name.substring(0, item.name.lastIndexOf('.'));
+      downloadBlob(downloadBlobTarget, `${nameWithoutExt}_compressed.${ext}`);
+      setSuccessMessage('Image downloaded successfully!');
+
+      try {
+        await api.post('/tools/log', { toolSlug: 'image-compress' });
+        setUsageStats(prev => ({ ...prev, usage: prev.usage + 1 }));
+      } catch (logErr) {
+        console.warn('Analytics logging failed.', logErr.message);
+      }
+    } catch (err) {
+      setErrorMessage(err.message || 'An error occurred during download.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
 
   // Reactive object URL caching to prevent leaks
   useEffect(() => {
@@ -1072,804 +1144,370 @@ export default function ImageCompressWorkspace({ onBack }) {
           const metadataText = stripMetadata ? 'Stripped' : 'Preserved';
 
           return (
-            <div className="flex flex-col lg:flex-row h-full w-full bg-slate-950 overflow-hidden">
+            <div className="flex h-full w-full bg-slate-950 overflow-hidden relative select-none">
+              
+              {/* Hidden file input for adding new files to queue */}
+              <input
+                id="add-image-input-hidden"
+                type="file"
+                multiple
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files) {
+                    const files = Array.from(e.target.files);
+                    const resolved = files.map(file => ({
+                      id: `${file.name}-${file.size}-${Date.now()}`,
+                      file,
+                      previewUrl: URL.createObjectURL(file),
+                      name: file.name,
+                      size: file.size,
+                      imgElement: null
+                    }));
+                    handleImagesSelected([...imagesQueue, ...resolved]);
+                  }
+                }}
+              />
 
-              {/* 1. LEFT PANEL: Carousel Queue & Original details */}
-              <div className="lg:w-72 bg-slate-900 border-r border-slate-800 p-5 flex flex-col gap-6 select-none justify-between h-full overflow-y-auto">
-                <div className="space-y-6">
-                  {/* File Upload zone trigger */}
-                  <label className="group flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-violet-500 rounded-2xl p-4.5 cursor-pointer text-center bg-slate-50/50 dark:bg-slate-950/20 transition-colors">
-                    <UploadCloud className="h-6.5 w-6.5 text-slate-400 group-hover:text-violet-500 mb-1" />
-                    <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Add Images</span>
-                    <input
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={(e) => {
-                        if (e.target.files) {
-                          const files = Array.from(e.target.files);
-                          const resolved = files.map(file => ({
-                            id: `${file.name}-${file.size}-${Date.now()}`,
-                            file,
-                            previewUrl: URL.createObjectURL(file),
-                            name: file.name,
-                            size: file.size,
-                            imgElement: null
-                          }));
-                          handleImagesSelected([...imagesQueue, ...resolved]);
-                        }
-                      }}
-                      className="hidden"
-                    />
-                  </label>
-
-                  {/* Thumbnail queue */}
-                  {imagesQueue.length > 1 && (
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">Uploaded Queue</label>
-                      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
-                        {imagesQueue.map(img => {
-                          const isFocused = img.id === focusedImg.id;
-                          const prog = queueProgress[img.id] || { status: 'pending', progress: 0 };
-                          return (
-                            <div
-                              key={img.id}
-                              onClick={() => setFocusedImageId(img.id)}
-                              className={`relative h-12 w-16 shrink-0 rounded-lg border-2 cursor-pointer transition overflow-hidden ${isFocused ? 'border-violet-500 ring-2 ring-violet-500/10' : 'border-slate-200 dark:border-slate-850 hover:border-slate-350'
-                                }`}
-                            >
-                              <img src={img.previewUrl} className="h-full w-full object-cover" alt="" />
-
-                              {/* Queue Status Overlay */}
-                              {prog.status === 'processing' && (
-                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-[9px] text-white font-black z-10">
-                                  {prog.progress}%
-                                </div>
-                              )}
-                              {prog.status === 'success' && (
-                                <div className="absolute bottom-0.5 right-0.5 bg-emerald-500 text-white rounded-full p-0.5 shadow-md z-10">
-                                  <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                                  </svg>
-                                </div>
-                              )}
-                              {prog.status === 'failed' && (
-                                <div className="absolute inset-0 bg-red-600/90 flex flex-col items-center justify-center gap-0.5 z-10">
-                                  <span className="text-[8px] text-white font-extrabold uppercase leading-none">Fail</span>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      retryImage(img.id);
-                                    }}
-                                    className="px-1 py-0.5 bg-white text-red-600 rounded text-[7px] font-black hover:bg-slate-100 transition"
-                                  >
-                                    Retry
-                                  </button>
-                                </div>
-                              )}
-
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const updated = imagesQueue.filter(x => x.id !== img.id);
-                                  handleImagesSelected(updated);
-                                }}
-                                className="absolute top-0.5 right-0.5 p-0.5 bg-red-500 text-white rounded-full hover:bg-red-650 transition z-20"
-                                title="Remove image"
-                              >
-                                <X className="h-2 w-2" />
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Batch Queue Processing Controls */}
-                  <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-3">
-                    <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
-                      Queue Processing
-                    </label>
-
-                    {/* Overall Progress Indicator */}
-                    {imagesQueue.length > 0 && (
-                      (() => {
-                        const successes = Object.values(queueProgress).filter(x => x.status === 'success').length;
-                        const failures = Object.values(queueProgress).filter(x => x.status === 'failed').length;
-                        const total = imagesQueue.length;
-                        const ratio = Math.round(((successes + failures) / total) * 100) || 0;
-
-                        return (
-                          <div className="space-y-2 bg-slate-50 dark:bg-slate-955 p-3 rounded-xl border border-slate-100 dark:border-slate-850/80">
-                            <div className="flex justify-between items-center text-[9px] font-bold text-slate-500 dark:text-slate-400">
-                              <span>Queue Progress</span>
-                              <span>{successes + failures} / {total} ({ratio}%)</span>
-                            </div>
-                            <div className="w-full bg-slate-205 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-gradient-to-r from-violet-500 to-indigo-500 transition-all duration-300"
-                                style={{ width: `${ratio}%` }}
-                              />
-                            </div>
-                            <div className="flex gap-2 justify-between items-center text-[8px] font-bold text-slate-400">
-                              <span>Successes: <span className="text-emerald-500 font-black">{successes}</span></span>
-                              <span>Failures: <span className="text-red-500 font-black">{failures}</span></span>
-                            </div>
-                          </div>
-                        );
-                      })()
-                    )}
-
-                    {/* Action buttons */}
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {queueStatus === 'idle' && (
-                        <button
-                          onClick={startBatchCompression}
-                          className="col-span-2 py-2 px-3 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-black shadow-md transition"
-                        >
-                          Start Batch processing
-                        </button>
-                      )}
-
-                      {queueStatus === 'processing' && (
-                        <>
-                          <button
-                            onClick={pauseBatchCompression}
-                            className="py-2 px-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-black shadow-md transition"
-                          >
-                            Pause Queue
-                          </button>
-                          <button
-                            onClick={cancelBatchCompression}
-                            className="py-2 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-500 rounded-xl text-xs font-bold transition"
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      )}
-
-                      {queueStatus === 'paused' && (
-                        <>
-                          <button
-                            onClick={resumeBatchCompression}
-                            className="py-2 px-3 bg-violet-600 hover:bg-violet-755 text-white rounded-xl text-xs font-black shadow-md transition"
-                          >
-                            Resume Queue
-                          </button>
-                          <button
-                            onClick={cancelBatchCompression}
-                            className="py-2 px-3 bg-slate-100 hover:bg-slate-205 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-500 rounded-xl text-xs font-bold transition"
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      )}
-
-                      {queueStatus === 'completed' && (
-                        <button
-                          onClick={cancelBatchCompression}
-                          className="col-span-2 py-2 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-500 rounded-xl text-xs font-bold transition"
-                        >
-                          Reset Engine
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Original image details */}
-                  <div className="space-y-3.5 pt-4 border-t border-slate-100 dark:border-slate-800">
-                    <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">Image Information</label>
-
-                    <div className="space-y-2.5">
-                      <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-850/50">
-                        <span className="text-[10px] font-bold text-slate-400">File Name</span>
-                        <span className="text-[10px] font-extrabold text-slate-700 dark:text-slate-200 truncate max-w-[150px]" title={focusedImg.name}>
-                          {focusedImg.name}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-850/50">
-                        <span className="text-[10px] font-bold text-slate-400">Original Size</span>
-                        <span className="text-[10px] font-extrabold text-slate-700 dark:text-slate-200">
-                          {formatBytes(focusedImg.size)}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-850/50">
-                        <span className="text-[10px] font-bold text-slate-400">Resolution</span>
-                        <span className="text-[10px] font-extrabold text-slate-700 dark:text-slate-200">
-                          {originalRes}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-850/50">
-                        <span className="text-[10px] font-bold text-slate-400">Format</span>
-                        <span className="text-[10px] font-extrabold text-slate-700 dark:text-slate-200">
-                          {originalExt}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between py-1 border-b border-slate-50 dark:border-slate-850/50">
-                        <span className="text-[10px] font-bold text-slate-400">Color Space</span>
-                        <span className="text-[10px] font-extrabold text-slate-700 dark:text-slate-200 uppercase">
-                          {colorSpace === 'grayscale' ? 'Grayscale' : 'sRGB'}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between py-1">
-                        <span className="text-[10px] font-bold text-slate-400">Metadata Status</span>
-                        <span className="text-[10px] font-extrabold text-slate-700 dark:text-slate-200">
-                          {metadataText}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Add a quick remove single active file button */}
-                {imagesQueue.length === 1 && (
-                  <button
-                    onClick={() => handleImagesSelected([])}
-                    className="w-full py-2.5 rounded-xl border border-red-500/20 text-red-500 hover:bg-red-500/5 text-xs font-bold transition flex items-center justify-center gap-1.5"
-                  >
-                    <X className="h-4 w-4" /> Remove File
-                  </button>
-                )}
-              </div>
-
-              {/* 2. CENTER PANEL: Draggable comparative viewport (zoom, pan, fit) */}
+              {/* 1. CENTER AREA: Canvas comparisons and overlays */}
               <div
                 ref={containerRef}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
-                className="flex-1 min-h-[500px] lg:min-h-[60vh] bg-slate-950 flex flex-col justify-between relative overflow-hidden select-none"
+                className="flex-1 h-full relative overflow-hidden flex items-center justify-center"
               >
-                {/* Drag comparison zone */}
+                {/* Checkered Canvas Viewport */}
                 <div
                   ref={viewportRef}
                   onPointerDown={handleViewportPointerDown}
                   onWheel={handleWheel}
-                  className="relative flex-1 overflow-hidden cursor-grab active:cursor-grabbing flex items-center justify-center"
+                  className="relative w-full h-full overflow-hidden cursor-grab active:cursor-grabbing flex items-center justify-center"
                   style={{
                     backgroundImage: 'conic-gradient(#1e1e1e 25%, #151515 25% 50%, #1e1e1e 50% 75%, #151515 75%)',
                     backgroundSize: '20px 20px',
                     backgroundColor: '#151515'
                   }}
                 >
+                  {/* Draggable and Zoomable image element wrapper */}
                   <div
                     className="absolute w-full h-full flex items-center justify-center transition-transform duration-75"
-                    style={{ transform: `translate(${panX}px, ${panY}px) scale(${zoom})` }}
+                    style={{
+                      transform: `translate(${panX}px, ${panY}px) scale(${zoom}) rotate(${rotation}deg)`
+                    }}
                   >
-                    {/* Before frame (Original) */}
-                    <div className="max-w-[75vw] max-h-[55vh] aspect-auto relative">
+                    {/* Left Side: Before Image (Original) */}
+                    <div className="max-w-[75vw] max-h-[75vh] aspect-auto relative">
                       <img
                         src={focusedImg.previewUrl}
-                        alt="Original Frame before compression"
-                        className="max-w-full max-h-[55vh] object-contain select-none pointer-events-none"
+                        alt="Original Preview"
+                        className="max-w-full max-h-[75vh] object-contain select-none pointer-events-none"
                       />
                     </div>
 
-                    {/* After frame (Clipped Compressed) */}
+                    {/* Right Side: After Image (Compressed, Clipped) */}
                     <div
-                      className="absolute max-w-[75vw] max-h-[55vh] aspect-auto overflow-hidden pointer-events-none"
+                      className="absolute max-w-[75vw] max-h-[75vh] aspect-auto overflow-hidden pointer-events-none"
                       style={{ clipPath: `inset(0px 0px 0px ${sliderPosition}%)` }}
                     >
                       <img
                         src={compressedObjectURL || focusedImg.previewUrl}
-                        alt="Compressed output preview frame"
-                        className="max-w-full max-h-[55vh] object-contain select-none pointer-events-none"
+                        alt="Optimized Preview"
+                        className="max-w-full max-h-[75vh] object-contain select-none pointer-events-none"
                       />
                     </div>
                   </div>
 
-                  {/* Vertical Separator line & Slider handle button */}
+                  {/* Squoosh Style Slider Handle */}
                   <div
-                    className="absolute inset-y-0 w-1 bg-violet-500 cursor-ew-resize pointer-events-auto"
+                    className="absolute inset-y-0 w-1 bg-slate-400 cursor-ew-resize pointer-events-auto"
                     style={{ left: `${sliderPosition}%` }}
                   >
                     <button
                       onPointerDown={handleSliderPointerDown}
-                      className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 p-2.5 rounded-full border-4 shadow-xl bg-violet-650 text-white transition-transform ${isDraggingSlider ? 'scale-110 border-white bg-violet-755' : 'border-violet-500 bg-violet-600 hover:scale-105'
-                        }`}
-                      aria-label="Drag middle comparison bar"
+                      className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex gap-1 items-center justify-center h-10 w-10 rounded-full bg-slate-900 border-2 border-slate-700 shadow-2xl cursor-pointer hover:scale-105 active:scale-95 transition-transform"
+                      aria-label="Split slider"
                     >
-                      <Move className="h-3.5 w-3.5" />
+                      {/* Pink left triangle */}
+                      <div className="w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent border-r-[6px] border-r-pink-500" />
+                      {/* Blue right triangle */}
+                      <div className="w-0 h-0 border-t-[5px] border-t-transparent border-b-[5px] border-b-transparent border-l-[6px] border-l-sky-400" />
                     </button>
-                  </div>
-
-                  {/* Floating side sizing details */}
-                  <div className="absolute top-4 left-4 p-2 rounded-lg bg-black/60 backdrop-blur-md border border-white/10 pointer-events-none">
-                    <span className="text-[9px] font-extrabold text-slate-400 block tracking-wider uppercase">Original</span>
-                    <span className="text-[10px] font-black text-white">{formatBytes(focusedImg.size)}</span>
-                  </div>
-                  <div className="absolute top-4 right-4 p-2 rounded-lg bg-violet-950/60 backdrop-blur-md border border-violet-500/20 pointer-events-none text-right">
-                    <span className="text-[9px] font-extrabold text-violet-400 block tracking-wider uppercase">Optimized</span>
-                    <span className="text-[10px] font-black text-white">
-                      {detail ? formatBytes(sizeAfter) : 'estimating...'}
-                    </span>
                   </div>
                 </div>
 
-                {/* Bottom Zoom & View Toolbar */}
-                <div className="p-3 border-t border-slate-900 bg-slate-950/80 backdrop-blur-sm flex justify-center items-center gap-3">
-                  <div className="flex items-center gap-1.5 p-0.5 rounded-xl bg-slate-900 border border-slate-850">
-                    <button
-                      onClick={handleZoomOut}
-                      className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"
-                      title="Zoom Out (-)"
-                    >
-                      <ZoomOut className="h-3.5 w-3.5" />
-                    </button>
-
-                    <span className="text-[10px] font-extrabold px-2.5 text-slate-400 select-none">
-                      {Math.round(zoom * 100)}%
-                    </span>
-
-                    <button
-                      onClick={handleZoomIn}
-                      className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"
-                      title="Zoom In (+)"
-                    >
-                      <ZoomIn className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-
+                {/* Squoosh-style Zoom Control pill overlay */}
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 bg-slate-900/90 backdrop-blur-md border border-slate-800 px-4 py-2 rounded-full shadow-2xl">
+                  <button
+                    onClick={handleZoomOut}
+                    className="p-1 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+                    title="Zoom Out"
+                  >
+                    <Minus className="h-4 w-4" />
+                  </button>
+                  <span className="text-xs font-black text-slate-200 select-none px-1">
+                    {Math.round(zoom * 100)}%
+                  </span>
+                  <button
+                    onClick={handleZoomIn}
+                    className="p-1 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+                    title="Zoom In"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                  <div className="h-4 w-[1px] bg-slate-800 mx-0.5" />
                   <button
                     onClick={handleResetZoom}
-                    className="p-2 rounded-xl border border-slate-855 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition flex items-center gap-1.5 text-[10px] font-extrabold"
-                    title="Fit bounds and center screen"
+                    className="p-1 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+                    title="Fit Screen"
                   >
-                    <RefreshCw className="h-3.5 w-3.5" /> Fit
+                    <RefreshCw className="h-4 w-4" />
                   </button>
-
                   <button
-                    onClick={handleFullscreenToggle}
-                    className="p-2 rounded-xl border border-slate-855 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition flex items-center gap-1.5 text-[10px] font-extrabold"
-                    title="Fullscreen compare"
+                    onClick={handleRotate}
+                    className="p-1 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+                    title="Rotate View"
                   >
-                    {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-                    <span>Fullscreen</span>
+                    <RotateCw className="h-4 w-4" />
                   </button>
+                </div>
+
+                {/* Bottom Left Floating Panel (Original Image Stats) */}
+                <div className="absolute bottom-6 left-6 z-30 bg-slate-900/95 backdrop-blur-md border border-slate-800 p-4 rounded-2xl w-64 shadow-2xl flex flex-col gap-3 select-none text-slate-100">
+                  <h3 className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Original</h3>
+                  <select
+                    value={focusedImg.id}
+                    onChange={(e) => {
+                      if (e.target.value === 'add_new') {
+                        document.getElementById('add-image-input-hidden').click();
+                      } else {
+                        setFocusedImageId(e.target.value);
+                      }
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200 focus:outline-none focus:border-sky-500 cursor-pointer"
+                  >
+                    {imagesQueue.map(img => (
+                      <option key={img.id} value={img.id}>
+                        {img.name.length > 25 ? img.name.substring(0, 22) + '...' : img.name}
+                      </option>
+                    ))}
+                    <option value="add_new">+ Add image...</option>
+                  </select>
+                  <div className="flex items-center gap-3 mt-1">
+                    <div className="h-10 w-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 shadow-inner">
+                      <FileImage className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[9px] text-slate-400 block font-bold leading-none uppercase">Size</span>
+                      <span className="text-xs font-black">{formatBytes(focusedImg.size)}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[9px] text-slate-400 block font-bold leading-none uppercase">Savings</span>
+                      <span className="text-xs font-black">0%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottom Right Floating Panel (Optimized Image Stats & Download) */}
+                <div className="absolute bottom-6 right-6 z-30 bg-slate-900/95 backdrop-blur-md border border-slate-800 p-4 rounded-2xl w-64 shadow-2xl flex flex-col gap-3 select-none text-slate-100 font-sans">
+                  <h3 className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Compress</h3>
+                  <select
+                    value={format === 'jpeg' ? 'MozJPEG' : format === 'png' ? 'OxiPNG' : format === 'webp' ? 'WebP' : 'AVIF'}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'MozJPEG') setFormat('jpeg');
+                      else if (val === 'OxiPNG') setFormat('png');
+                      else if (val === 'WebP') setFormat('webp');
+                      else setFormat('avif');
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200 focus:outline-none focus:border-violet-500 cursor-pointer"
+                  >
+                    <option value="WebP">WebP</option>
+                    <option value="MozJPEG">MozJPEG</option>
+                    <option value="OxiPNG">OxiPNG</option>
+                    <option value="AVIF">AVIF</option>
+                  </select>
+                  <div className="flex items-center justify-between gap-3 mt-1 font-sans">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[9px] text-slate-400 block font-bold leading-none uppercase">Size</span>
+                      <span className="text-xs font-black">
+                        {detail ? formatBytes(sizeAfter) : 'estimating...'}
+                      </span>
+                    </div>
+                    {detail && savings > 0 ? (
+                      <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-extrabold px-2 py-1 rounded-lg">
+                        ↓ {Math.round(savings)}%
+                      </div>
+                    ) : null}
+                    <button
+                      onClick={() => handleDownloadImage(focusedImg.id)}
+                      disabled={isProcessing}
+                      className="h-11 w-11 rounded-full bg-sky-500 hover:bg-sky-600 disabled:opacity-50 active:scale-95 transition-all text-white flex items-center justify-center shadow-xl cursor-pointer hover:shadow-sky-500/25"
+                      title="Download Compressed Image"
+                    >
+                      {isProcessing ? (
+                        <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                      ) : (
+                        <Download className="h-5 w-5" />
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              {/* 3. RIGHT PANEL: Compression Settings Controls */}
-              <div className="lg:w-80 bg-slate-900 border-l border-slate-800 p-5 flex flex-col gap-6 overflow-y-auto justify-between h-full">
-
-                <div className="space-y-6">
-                  {/* Format Selection buttons */}
-                  <div>
-                    <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block mb-2.5">
-                      Output Format
-                    </label>
-                    <div className="grid grid-cols-5 gap-1">
-                      {['auto', 'webp', 'jpeg', 'png', 'avif'].map(fmt => (
-                        <button
-                          key={fmt}
-                          onClick={() => setFormat(fmt)}
-                          className={`py-1.5 rounded-lg text-[9px] font-black tracking-wide uppercase transition border ${format === fmt
-                            ? 'bg-violet-600 border-violet-600 text-white'
-                            : 'bg-slate-50 dark:bg-slate-950 text-slate-655 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-350'
-                            }`}
-                        >
-                          {fmt}
-                        </button>
-                      ))}
+              {/* 2. RIGHT PANEL: Expandable Options (Resize, Reduce Palette, Format Controls) */}
+              <div className="lg:w-80 bg-slate-900 border-l border-slate-800 flex flex-col h-full overflow-hidden select-none">
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  
+                  {/* EDIT HEADER */}
+                  <div className="bg-sky-500/10 border border-sky-500/20 rounded-xl p-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-extrabold uppercase tracking-widest text-sky-400">Edit Settings</span>
                     </div>
-                  </div>
-
-                  {/* Quality Presets */}
-                  {format !== 'png' && (
-                    <div>
-                      <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block mb-2.5">
-                        Compression Presets
-                      </label>
-                      <div className="space-y-1.5">
-                        {[
-                          { id: 'max', label: 'Maximum Quality', quality: 95 },
-                          { id: 'high', label: 'High Quality', quality: 85 },
-                          { id: 'balanced', label: 'Balanced', quality: 70 },
-                          { id: 'small', label: 'Small Size', quality: 50 },
-                          { id: 'ultra', label: 'Ultra Compression', quality: 30 }
-                        ].map(preset => (
-                          <button
-                            key={preset.id}
-                            onClick={() => handlePresetSelect(preset)}
-                            className={`w-full p-2.5 rounded-xl border text-left transition flex justify-between items-center ${activePreset === preset.id
-                              ? 'border-violet-600 bg-violet-600/5 dark:bg-violet-500/5'
-                              : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-slate-50 dark:bg-slate-950/60'
-                              }`}
-                          >
-                            <span className="block font-bold text-[10px] text-slate-800 dark:text-slate-200">{preset.label}</span>
-                            <span className="text-[10px] font-black text-violet-500 dark:text-violet-400">{preset.quality}%</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Quality slider */}
-                  {format !== 'png' && (
-                    <div>
-                      <div className="flex justify-between items-center mb-2">
-                        <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
-                          Quality Factor
-                        </label>
-                        <span className="text-xs font-black text-violet-500 dark:text-violet-400">{quality}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="10"
-                        max="100"
-                        step="1"
-                        value={quality}
-                        onChange={handleCustomQualityChange}
-                        className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-violet-600"
-                      />
-                    </div>
-                  )}
-
-                  {/* Target File Sizer presets */}
-                  {format !== 'png' && (
-                    <div className="space-y-3 border-t border-slate-100 dark:border-slate-800 pt-4.5">
-                      <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
-                        Target File Size
-                      </label>
-
-                      <div className="flex gap-1.5 flex-wrap">
-                        {[
-                          { label: '100 KB', id: '100kb', value: 100 },
-                          { label: '200 KB', id: '200kb', value: 200 },
-                          { label: '500 KB', id: '500kb', value: 500 },
-                          { label: '1 MB', id: '1mb', value: 1024 },
-                          { label: '2 MB', id: '2mb', value: 2048 }
-                        ].map(p => (
-                          <button
-                            key={p.id}
-                            onClick={() => handleTargetPresetSelect(p)}
-                            className={`px-2.5 py-1 rounded-lg text-[9px] font-extrabold border transition ${activeTargetPreset === p.id
-                              ? 'bg-violet-600 border-violet-600 text-white animate-pulse'
-                              : 'bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-350'
-                              }`}
-                          >
-                            {p.label}
-                          </button>
-                        ))}
-                      </div>
-
-                      <div className="flex items-center bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-800 rounded-xl p-1">
+                    
+                    {/* Resize Toggle & Controls */}
+                    <div className="mt-3 space-y-3 pt-3 border-t border-slate-800">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-semibold text-slate-200">Resize Image</span>
                         <input
-                          type="number"
-                          placeholder="Custom limit"
-                          value={targetSize}
-                          onChange={handleCustomTargetChange}
-                          className="w-full bg-transparent px-2.5 py-1 focus:outline-none text-[10px] dark:text-slate-100"
+                          type="checkbox"
+                          checked={resizeEnabled}
+                          onChange={(e) => setResizeEnabled(e.target.checked)}
+                          className="w-4 h-4 text-sky-500 bg-slate-955 border-slate-800 rounded focus:ring-sky-500 cursor-pointer"
                         />
-                        <select
-                          value={targetUnit}
-                          onChange={(e) => setTargetUnit(e.target.value)}
-                          className="bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-800 rounded text-[9px] font-bold px-1 py-0.5 focus:outline-none dark:text-slate-200"
-                        >
-                          <option value="KB">KB</option>
-                          <option value="MB">MB</option>
-                        </select>
                       </div>
-
-                      {targetSolverWarning && (
-                        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/15 text-amber-500 text-[9px] font-semibold flex items-start gap-2">
-                          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                          <p>{targetSolverWarning}</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Reset / Auto Optimize quick buttons */}
-                  {format !== 'png' && (
-                    <div className="grid grid-cols-2 gap-2 border-t border-slate-100 dark:border-slate-800 pt-4">
-                      <button
-                        onClick={handleReset}
-                        className="py-2 px-2.5 rounded-lg border border-slate-200 dark:border-slate-800 text-[10px] font-bold hover:bg-slate-50 dark:hover:bg-slate-950 transition text-slate-500 dark:text-slate-400"
-                      >
-                        Reset Defaults
-                      </button>
-                      <button
-                        onClick={handleAutoOptimize}
-                        className="py-2 px-2.5 rounded-lg bg-violet-650 hover:bg-violet-750 text-white text-[10px] font-black shadow-md transition flex items-center justify-center gap-1"
-                      >
-                        <Sparkles className="h-3 w-3" /> Auto Optimize
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Advanced settings widgets */}
-                  {format !== 'png' && (
-                    <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-3.5">
-                      <button
-                        onClick={() => setShowAdvanced(!showAdvanced)}
-                        className="w-full flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-slate-400 hover:text-violet-500 transition select-none"
-                      >
-                        <span>Advanced Parameters</span>
-                        <span>{showAdvanced ? '▼' : '▲'}</span>
-                      </button>
-
-                      {showAdvanced && (
-                        <div className="space-y-3.5 pt-1">
-                          <div className="space-y-2.5 bg-slate-50 dark:bg-slate-955 p-3 rounded-xl border border-slate-205/20 dark:border-slate-800/80">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[9px] font-bold text-slate-655 dark:text-slate-350">EXIF Metadata Removal</span>
-                              <input
-                                type="checkbox"
-                                checked={stripMetadata}
-                                onChange={(e) => setStripMetadata(e.target.checked)}
-                                className="h-3.5 w-3.5 accent-violet-600 cursor-pointer"
-                              />
-                            </div>
-
-                            {format === 'jpeg' && (
-                              <div className="flex items-center justify-between border-t border-slate-200/40 dark:border-slate-800/40 pt-2">
-                                <span className="text-[9px] font-bold text-slate-655 dark:text-slate-350">Progressive JPEG</span>
-                                <input
-                                  type="checkbox"
-                                  checked={progressiveJpeg}
-                                  onChange={(e) => setProgressiveJpeg(e.target.checked)}
-                                  className="h-3.5 w-3.5 accent-violet-600 cursor-pointer"
-                                />
-                              </div>
-                            )}
-
-                            {format === 'webp' && (
-                              <div className="flex items-center justify-between border-t border-slate-200/40 dark:border-slate-800/40 pt-2">
-                                <span className="text-[9px] font-bold text-slate-655 dark:text-slate-350">Lossless Encoding</span>
-                                <input
-                                  type="checkbox"
-                                  checked={lossless}
-                                  onChange={(e) => setLossless(e.target.checked)}
-                                  className="h-3.5 w-3.5 accent-violet-600 cursor-pointer"
-                                />
-                              </div>
-                            )}
-
-                            {format === 'jpeg' && (
-                              <div className="flex items-center justify-between border-t border-slate-200/40 dark:border-slate-800/40 pt-2">
-                                <span className="text-[9px] font-bold text-slate-655 dark:text-slate-350">Chroma Subsampling</span>
-                                <select
-                                  value={chromaSubsampling}
-                                  onChange={(e) => setChromaSubsampling(e.target.value)}
-                                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded text-[9px] font-bold px-1 py-0.5 focus:outline-none dark:text-slate-350"
-                                >
-                                  <option value="4:2:0">4:2:0</option>
-                                  <option value="4:4:4">4:4:4</option>
-                                </select>
-                              </div>
-                            )}
-
-                            <div className="flex items-center justify-between border-t border-slate-200/40 dark:border-slate-800/40 pt-2">
-                              <span className="text-[9px] font-bold text-slate-655 dark:text-slate-350">Color Space</span>
-                              <select
-                                value={colorSpace}
-                                onChange={(e) => setColorSpace(e.target.value)}
-                                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded text-[9px] font-bold px-1 py-0.5 focus:outline-none dark:text-slate-350"
-                              >
-                                <option value="srgb">sRGB</option>
-                                <option value="grayscale">Grayscale</option>
-                              </select>
-                            </div>
+                      
+                      {resizeEnabled && (
+                        <div className="space-y-2">
+                          <div>
+                            <label className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block mb-1">Method</label>
+                            <select
+                              value={resizeMethod}
+                              onChange={(e) => setResizeMethod(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none cursor-pointer"
+                            >
+                              <option value="Lanczos3">Lanczos3 (High Quality)</option>
+                              <option value="Triangle">Triangle (Bilinear)</option>
+                              <option value="Bell">Bell</option>
+                            </select>
+                          </div>
+                          
+                          <div>
+                            <label className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block mb-1">Preset Percentage</label>
+                            <select
+                              value={resizePreset}
+                              onChange={(e) => handleResizePresetChange(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none cursor-pointer"
+                            >
+                              <option value="100%">100%</option>
+                              <option value="70%">70%</option>
+                              <option value="50%">50%</option>
+                              <option value="25%">25%</option>
+                            </select>
                           </div>
 
-                          <div className="bg-slate-50 dark:bg-slate-955 p-3 rounded-xl border border-slate-205/20 dark:border-slate-800/80 space-y-2.5">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[9px] font-bold text-slate-655 dark:text-slate-350">Resize Outputs</span>
-                              <input
-                                type="checkbox"
-                                checked={resizeEnabled}
-                                onChange={(e) => setResizeEnabled(e.target.checked)}
-                                className="h-3.5 w-3.5 accent-violet-600 cursor-pointer"
-                              />
-                            </div>
-
-                            {resizeEnabled && (
-                              <div className="space-y-2 pt-1 border-t border-slate-200/40 dark:border-slate-800/40">
-                                <div className="grid grid-cols-2 gap-1.5">
-                                  <div>
-                                    <label className="text-[8px] font-bold text-slate-400 block mb-0.5 uppercase">Width (px)</label>
-                                    <input
-                                      type="number"
-                                      value={resizeWidth}
-                                      onChange={(e) => setResizeWidth(e.target.value)}
-                                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2 py-0.5 text-xs focus:outline-none focus:border-violet-500"
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="text-[8px] font-bold text-slate-400 block mb-0.5 uppercase">Height (px)</label>
-                                    <input
-                                      type="number"
-                                      value={resizeHeight}
-                                      onChange={(e) => setResizeHeight(e.target.value)}
-                                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded px-2 py-0.5 text-xs focus:outline-none focus:border-violet-500"
-                                    />
-                                  </div>
-                                </div>
-                                <div className="flex items-center justify-between pt-1">
-                                  <span className="text-[8px] font-bold text-slate-400">Lock Aspect Ratio</span>
-                                  <input
-                                    type="checkbox"
-                                    checked={keepAspectRatio}
-                                    onChange={(e) => setKeepAspectRatio(e.target.checked)}
-                                    className="h-3 w-3 accent-violet-600 cursor-pointer"
-                                  />
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="space-y-2.5 bg-slate-50 dark:bg-slate-955 p-3 rounded-xl border border-slate-205/20 dark:border-slate-800/80">
+                          <div className="grid grid-cols-2 gap-2">
                             <div>
-                              <div className="flex justify-between items-center mb-1">
-                                <span className="text-[9px] font-bold text-slate-655 dark:text-slate-350">Sharpen Filter</span>
-                                <span className="text-[9px] font-black text-violet-505">{sharpenAmount}%</span>
-                              </div>
+                              <label className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block mb-1">Width</label>
                               <input
-                                type="range"
-                                min="0"
-                                max="100"
-                                step="1"
-                                value={sharpenAmount}
-                                onChange={(e) => setSharpenAmount(Number(e.target.value))}
-                                className="w-full h-1 bg-slate-200 dark:bg-slate-850 rounded appearance-none cursor-pointer accent-violet-600"
+                                type="number"
+                                value={resizeWidth}
+                                onChange={(e) => setResizeWidth(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none"
                               />
                             </div>
+                            <div>
+                              <label className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block mb-1">Height</label>
+                              <input
+                                type="number"
+                                value={resizeHeight}
+                                onChange={(e) => setResizeHeight(e.target.value)}
+                                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none"
+                              />
+                            </div>
+                          </div>
 
-                            <div className="border-t border-slate-200/40 dark:border-slate-800/40 pt-2">
-                              <div className="flex justify-between items-center mb-1">
-                                <span className="text-[9px] font-bold text-slate-655 dark:text-slate-350">Blur Filter</span>
-                                <span className="text-[9px] font-black text-violet-505">{blurAmount}px</span>
-                              </div>
-                              <input
-                                type="range"
-                                min="0"
-                                max="10"
-                                step="1"
-                                value={blurAmount}
-                                onChange={(e) => setBlurAmount(Number(e.target.value))}
-                                className="w-full h-1 bg-slate-200 dark:bg-slate-850 rounded appearance-none cursor-pointer accent-violet-600"
-                              />
-                            </div>
+                          <div className="flex items-center gap-2 pt-1.5">
+                            <input
+                              type="checkbox"
+                              checked={keepAspectRatio}
+                              onChange={(e) => setKeepAspectRatio(e.target.checked)}
+                              className="w-3.5 h-3.5 text-sky-500 bg-slate-955 border-slate-800 rounded cursor-pointer"
+                            />
+                            <label className="text-[10px] text-slate-300">Maintain aspect ratio</label>
                           </div>
                         </div>
                       )}
                     </div>
-                  )}
+                  </div>
 
-                  {/* Live Analytics Panel widget */}
-                  <div className="border-t border-slate-100 dark:border-slate-800 pt-4.5 space-y-4">
-                    <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
-                      Professional Compression Analytics
-                    </label>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="bg-slate-50 dark:bg-slate-955 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                        <span className="text-[8px] font-bold text-slate-400 block tracking-wider uppercase">Original Size</span>
-                        <span className="text-[10px] font-black text-slate-800 dark:text-slate-100 block mt-0.5">
-                          {formatBytes(focusedImg.size)}
-                        </span>
-                      </div>
-
-                      <div className="bg-slate-50 dark:bg-slate-955 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                        <span className="text-[8px] font-bold text-slate-400 block tracking-wider uppercase">Compressed Size</span>
-                        <span className="text-[10px] font-black text-violet-500 block mt-0.5">
-                          {detail ? formatBytes(sizeAfter) : 'estimating...'}
-                        </span>
-                      </div>
-
-                      <div className="bg-slate-50 dark:bg-slate-955 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                        <span className="text-[8px] font-bold text-slate-400 block tracking-wider uppercase">Saved Size</span>
-                        <span className="text-[10px] font-black text-emerald-500 block mt-0.5">
-                          {detail ? formatBytes(Math.max(0, focusedImg.size - sizeAfter)) : '...'}
-                        </span>
-                      </div>
-
-                      <div className="bg-slate-50 dark:bg-slate-955 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                        <span className="text-[8px] font-bold text-slate-400 block tracking-wider uppercase">Compression %</span>
-                        <span className="text-[10px] font-black text-emerald-500 block mt-0.5">
-                          -{savings}%
-                        </span>
-                      </div>
-
-                      <div className="bg-slate-50 dark:bg-slate-955 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                        <span className="text-[8px] font-bold text-slate-400 block tracking-wider uppercase">Original Res</span>
-                        <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-205 block mt-0.5">
-                          {originalRes}
-                        </span>
-                      </div>
-
-                      <div className="bg-slate-50 dark:bg-slate-955 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                        <span className="text-[8px] font-bold text-slate-400 block tracking-wider uppercase">Output Res</span>
-                        <span className="text-[10px] font-bold text-slate-705 dark:text-slate-200 block mt-0.5">
-                          {outputRes}
-                        </span>
-                      </div>
-
-                      <div className="bg-slate-50 dark:bg-slate-955 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                        <span className="text-[8px] font-bold text-slate-400 block tracking-wider uppercase">Original Format</span>
-                        <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 block mt-0.5">
-                          {originalExt}
-                        </span>
-                      </div>
-
-                      <div className="bg-slate-50 dark:bg-slate-955 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                        <span className="text-[8px] font-bold text-slate-400 block tracking-wider uppercase">Output Format</span>
-                        <span className="text-[10px] font-black text-indigo-500 block mt-0.5">
-                          {outputExt}
-                        </span>
-                      </div>
-
-                      <div className="bg-slate-50 dark:bg-slate-955 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                        <span className="text-[8px] font-bold text-slate-400 block tracking-wider uppercase">Estimated Quality</span>
-                        <span className="text-[10px] font-black text-violet-500 block mt-0.5">
-                          {qualityScore}%
-                        </span>
-                      </div>
-
-                      <div className="bg-slate-50 dark:bg-slate-955 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                        <span className="text-[8px] font-bold text-slate-400 block tracking-wider uppercase">Est. Download Size</span>
-                        <span className="text-[10px] font-black text-slate-800 dark:text-slate-100 block mt-0.5">
-                          {detail ? formatBytes(sizeAfter) : 'estimating...'}
-                        </span>
-                      </div>
-
-                      <div className="bg-slate-50 dark:bg-slate-955 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                        <span className="text-[8px] font-bold text-slate-400 block tracking-wider uppercase">Compression Ratio</span>
-                        <span className="text-[10px] font-black text-indigo-500 block mt-0.5">
-                          {sizeAfter > 0 ? (focusedImg.size / sizeAfter).toFixed(2) : '1.00'} : 1
-                        </span>
-                      </div>
-
-                      <div className="bg-slate-50 dark:bg-slate-955 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                        <span className="text-[8px] font-bold text-slate-400 block tracking-wider uppercase">Metadata Removed</span>
-                        <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 block mt-0.5">
-                          {stripMetadata ? 'Yes (EXIF Stripped)' : 'No (Preserved)'}
-                        </span>
-                      </div>
-
-                      <div className="bg-slate-50 dark:bg-slate-955 p-3 rounded-xl border border-slate-100 dark:border-slate-800 col-span-2 flex items-center justify-between">
-                        <div>
-                          <span className="text-[8px] font-bold text-slate-400 block tracking-wider uppercase">Processing latency</span>
-                          <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400 block mt-0.5">
-                            {typeof OffscreenCanvas !== 'undefined' ? 'Isolated Web Worker' : 'Main Canvas Fallback'}
-                          </span>
+                  {/* COMPRESS HEADER */}
+                  <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl p-3">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-xs font-extrabold uppercase tracking-widest text-violet-400 font-sans">Format Settings</span>
+                    </div>
+                    
+                    {/* Presets and Quality Sliders */}
+                    <div className="space-y-4 pt-3 border-t border-slate-800">
+                      {format !== 'png' && (
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <label className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Quality</label>
+                            <span className="text-xs font-black text-violet-400">{quality}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="10"
+                            max="100"
+                            step="1"
+                            value={quality}
+                            onChange={handleCustomQualityChange}
+                            className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-violet-500"
+                          />
                         </div>
-                        <div className="text-right">
-                          <span className="text-[8px] font-bold text-slate-400 block tracking-wider uppercase">Execution Speed</span>
-                          <span className="text-[10px] font-black text-indigo-500 block mt-0.5">
-                            {detail && detail.timeMs !== undefined ? `${detail.timeMs}ms` : 'estimating...'}
-                          </span>
+                      )}
+
+                      {format === 'webp' && (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={lossless}
+                            onChange={(e) => setLossless(e.target.checked)}
+                            className="w-3.5 h-3.5 text-violet-500 bg-slate-955 border-slate-800 rounded cursor-pointer"
+                          />
+                          <label className="text-[10px] text-slate-300">Lossless compression</label>
                         </div>
+                      )}
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={stripMetadata}
+                          onChange={(e) => setStripMetadata(e.target.checked)}
+                          className="w-3.5 h-3.5 text-violet-500 bg-slate-955 border-slate-800 rounded cursor-pointer"
+                        />
+                        <label className="text-[10px] text-slate-300">Strip EXIF metadata</label>
                       </div>
                     </div>
                   </div>
-                </div>
-
-                {/* Actions Download trigger */}
-                <div className="pt-4 border-t border-slate-100 dark:border-slate-850">
-                  <button
-                    onClick={handleDownloadCompressed}
-                    disabled={isProcessing || imagesQueue.length === 0 || !isAllowed}
-                    className="w-full py-3 rounded-2xl bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white font-bold text-sm shadow-lg shadow-violet-600/25 transition flex items-center justify-center gap-2"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                        <span>Compiling ZIP...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Download className="h-4.5 w-4.5" />
-                        <span>Download Optimized {imagesQueue.length > 1 ? 'ZIP' : originalExt}</span>
-                      </>
-                    )}
-                  </button>
+                  
+                  {/* ANALYTICS CARD */}
+                  <div className="bg-slate-955 border border-slate-850 rounded-xl p-3 space-y-2.5">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Execution Info</span>
+                    <div className="grid grid-cols-2 gap-2 text-[10px]">
+                      <div className="bg-slate-900 p-2 rounded-lg">
+                        <span className="text-slate-400 block font-bold leading-none">Engine</span>
+                        <span className="text-slate-200 block mt-1">
+                          {typeof OffscreenCanvas !== 'undefined' ? 'Web Worker' : 'Canvas UI'}
+                        </span>
+                      </div>
+                      <div className="bg-slate-900 p-2 rounded-lg">
+                        <span className="text-slate-400 block font-bold leading-none">Speed</span>
+                        <span className="text-indigo-400 block font-black mt-1">
+                          {detail && detail.timeMs !== undefined ? `${detail.timeMs}ms` : 'estimating...'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

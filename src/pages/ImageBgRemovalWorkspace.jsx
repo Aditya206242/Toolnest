@@ -22,7 +22,7 @@ export default function ImageBgRemovalWorkspace({ onBack }) {
   const [edgeSmoothing, setEdgeSmoothing] = useState(true);
   const [hairRefinement, setHairRefinement] = useState(true);
   const [shadowPreservation, setShadowPreservation] = useState(true);
-  const [autoCrop, setAutoCrop] = useState(true);
+  const [autoCrop, setAutoCrop] = useState(false);
 
   // Compare slider state
   const [sliderPct, setSliderPct] = useState(50); // 0 to 100
@@ -260,7 +260,7 @@ export default function ImageBgRemovalWorkspace({ onBack }) {
     setEdgeSmoothing(true);
     setHairRefinement(true);
     setShadowPreservation(true);
-    setAutoCrop(true);
+    setAutoCrop(false);
     setSliderPct(50);
   };
 

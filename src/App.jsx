@@ -1,7 +1,7 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { Zap, Moon, Sun, ExternalLink, User, LogOut, LayoutDashboard, BookOpen } from 'lucide-react';
+import { Zap, Moon, Sun, ExternalLink, User, LogOut, LayoutDashboard, BookOpen, Settings, Users, PenLine, Workflow, Crown } from 'lucide-react';
 import ProtectedRoute from './components/ProtectedRoute';
 
 // Lazy load pages
@@ -18,6 +18,10 @@ const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const Pricing = lazy(() => import('./pages/Pricing'));
 const Billing = lazy(() => import('./pages/Billing'));
+const AccountSettings = lazy(() => import('./pages/AccountSettings'));
+const TeamSettings = lazy(() => import('./pages/TeamSettings'));
+const Signatures = lazy(() => import('./pages/Signatures'));
+const Workflows = lazy(() => import('./pages/Workflows'));
 
 // Admin CMS pages
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
@@ -28,6 +32,20 @@ const AdminTags = lazy(() => import('./pages/AdminTags'));
 function AppContent() {
   const [darkMode, setDarkMode] = useState(true);
   const { user, logout, isAuthenticated, isAdmin } = useAuth();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   return (
     <Router>
@@ -75,22 +93,101 @@ function AppContent() {
 
               {/* Dynamic Authentication Header Control */}
               {isAuthenticated ? (
-                <div className="flex items-center gap-3">
-                  <div className="hidden sm:flex flex-col text-right">
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate max-w-[120px]">
-                      {user.fullName || user.email}
-                    </span>
-                    <span className="text-[9px] font-black uppercase text-violet-500 tracking-wider">
-                      {user.role}
-                    </span>
-                  </div>
+                <div className="relative" ref={dropdownRef}>
                   <button 
-                    onClick={logout}
-                    className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/20 text-slate-500 transition"
-                    title="Sign Out"
+                    onClick={() => setDropdownOpen(!dropdownOpen)}
+                    className="flex items-center gap-1.5 focus:outline-none"
+                    aria-label="User Menu"
                   >
-                    <LogOut className="h-5 w-5" />
+                    <div className="flex items-center justify-center h-10 w-10 rounded-full bg-gradient-to-tr from-violet-600 to-indigo-600 text-white font-bold text-sm shadow-md hover:scale-105 active:scale-95 transition cursor-pointer select-none border-2 border-white dark:border-slate-800">
+                      {user.fullName ? user.fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : user.email.slice(0, 2).toUpperCase()}
+                    </div>
                   </button>
+
+                  {/* Dropdown Menu */}
+                  {dropdownOpen && (
+                    <div className="absolute right-0 mt-3 w-64 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-3 duration-200">
+                      
+                      {/* User Info Header */}
+                      <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                        <div className="flex items-center justify-center h-11 w-11 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 font-extrabold text-base border border-violet-500/20">
+                          {user.fullName ? user.fullName.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">
+                            {user.fullName || 'User'}
+                          </span>
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                            {user.email}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Menu Links */}
+                      <div className="p-1.5 space-y-0.5">
+                        <Link 
+                          to="/account/settings" 
+                          onClick={() => setDropdownOpen(false)}
+                          className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-850 hover:text-violet-600 dark:hover:text-violet-400 transition"
+                        >
+                          <Settings className="h-4 w-4" />
+                          Account settings
+                        </Link>
+                        <Link 
+                          to="/team" 
+                          onClick={() => setDropdownOpen(false)}
+                          className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-850 hover:text-violet-600 dark:hover:text-violet-400 transition"
+                        >
+                          <Users className="h-4 w-4" />
+                          Team
+                        </Link>
+                        <Link 
+                          to="/signatures" 
+                          onClick={() => setDropdownOpen(false)}
+                          className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-850 hover:text-violet-600 dark:hover:text-violet-400 transition"
+                        >
+                          <PenLine className="h-4 w-4" />
+                          Signatures
+                        </Link>
+                        <Link 
+                          to="/workflows" 
+                          onClick={() => setDropdownOpen(false)}
+                          className="flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-850 hover:text-violet-600 dark:hover:text-violet-400 transition"
+                        >
+                          <Workflow className="h-4 w-4" />
+                          Workflows
+                        </Link>
+                        <Link 
+                          to="/pricing" 
+                          onClick={() => setDropdownOpen(false)}
+                          className="flex items-center justify-between px-3 py-2.5 text-xs font-bold rounded-xl text-amber-600 dark:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition group"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <Crown className="h-4 w-4 text-amber-500 fill-amber-500/20 group-hover:scale-110 transition duration-300" />
+                            <span>Upgrade to Premium</span>
+                          </div>
+                          <span className="text-[9px] bg-amber-500 text-white px-1.5 py-0.5 rounded-md font-black uppercase tracking-wider scale-90">PRO</span>
+                        </Link>
+                      </div>
+
+                      <hr className="border-slate-100 dark:border-slate-800 my-1" />
+
+                      {/* Log Out */}
+                      <div className="p-1.5">
+                        <button 
+                          onClick={() => {
+                            setDropdownOpen(false);
+                            logout();
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold rounded-xl text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition"
+                        >
+                          <LogOut className="h-4 w-4" />
+                          Log out
+                        </button>
+                      </div>
+
+                    </div>
+                  )}
                 </div>
               ) : (
                 <Link 
@@ -138,6 +235,38 @@ function AppContent() {
                 element={
                   <ProtectedRoute allowedRoles={['user', 'premium', 'admin']}>
                     <Billing />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/account/settings" 
+                element={
+                  <ProtectedRoute allowedRoles={['user', 'premium', 'admin']}>
+                    <AccountSettings />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/team" 
+                element={
+                  <ProtectedRoute allowedRoles={['user', 'premium', 'admin']}>
+                    <TeamSettings />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/signatures" 
+                element={
+                  <ProtectedRoute allowedRoles={['user', 'premium', 'admin']}>
+                    <Signatures />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/workflows" 
+                element={
+                  <ProtectedRoute allowedRoles={['user', 'premium', 'admin']}>
+                    <Workflows />
                   </ProtectedRoute>
                 } 
               />

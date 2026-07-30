@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   Search, Image, FileText, Code, Percent, Wrench, Star, 
   Zap, ArrowRight, ShieldCheck, Check, HelpCircle 
@@ -231,8 +232,11 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredTools.map(tool => {
               const Icon = tool.icon;
+              const isInternal = tool.href.startsWith('/');
+              const CardComponent = isInternal ? Link : 'a';
+              const cardProps = isInternal ? { to: tool.href } : { href: tool.href };
               return (
-                <a key={tool.id} href={tool.href} className="group relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl hover:border-indigo-500/50 hover:shadow-xl dark:hover:shadow-none dark:hover:bg-slate-900/80 transition-all duration-300 flex flex-col justify-between">
+                <CardComponent key={tool.id} {...cardProps} className="group relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-2xl hover:border-indigo-500/50 hover:shadow-xl dark:hover:shadow-none dark:hover:bg-slate-900/80 transition-all duration-300 flex flex-col justify-between">
                   <div>
                     <div className="flex items-center justify-between mb-4">
                       <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 group-hover:bg-indigo-500/10 group-hover:text-indigo-500 transition-colors">
@@ -255,7 +259,7 @@ export default function Home() {
                     <span>LAUNCH TOOL</span>
                     <ArrowRight className="h-4 w-4 transform group-hover:translate-x-1.5 transition-transform" />
                   </div>
-                </a>
+                </CardComponent>
               );
             })}
           </div>

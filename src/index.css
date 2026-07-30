@@ -1,3 +1,19 @@
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* Fullscreen Workspace Overrides */
+html.hide-site-layout nav {
+  display: none !important;
+}
+html.hide-site-layout footer {
+  display: none !important;
+}
+html.hide-site-layout main {
+  max-width: none !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+}

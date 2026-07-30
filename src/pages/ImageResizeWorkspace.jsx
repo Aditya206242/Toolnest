@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import JSZip from 'jszip';
 import { 
   ArrowLeft, Sliders, CheckCircle, AlertTriangle, Play, Sparkles, 
-  Download, FileImage, Layers, HelpCircle
+  Download, FileImage, Layers, HelpCircle, X
 } from 'lucide-react';
 import ImageUpload from '../components/ImageUpload';
 import { useImage } from '../hooks/useImage';
@@ -42,6 +42,18 @@ export default function ImageResizeWorkspace({ onBack }) {
     };
     fetchLimits();
   }, []);
+
+  // Toggle fullscreen layout class when queue changes
+  useEffect(() => {
+    if (imagesQueue.length > 0) {
+      document.documentElement.classList.add('hide-site-layout');
+    } else {
+      document.documentElement.classList.remove('hide-site-layout');
+    }
+    return () => {
+      document.documentElement.classList.remove('hide-site-layout');
+    };
+  }, [imagesQueue]);
 
   const handleImagesSelected = async (updatedQueue) => {
     setErrorMessage('');
@@ -158,28 +170,24 @@ export default function ImageResizeWorkspace({ onBack }) {
     }
   };
 
+  const handleExitWorkspace = () => {
+    if (imagesQueue.length > 0) {
+      setImagesQueue([]);
+    } else {
+      onBack();
+    }
+  };
+
   return (
-    <div className="space-y-8">
-      {/* Header controls */}
-      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4 mb-6">
-        <button
-          onClick={onBack}
-          className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-violet-500 transition border border-slate-200 dark:border-slate-800 px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900"
-          aria-label="Back to catalog"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to Catalog
-        </button>
-        <div className="text-right">
-          <span className="text-[10px] font-extrabold text-indigo-500 tracking-widest block uppercase">
-            Client-Side Image Sizing
-          </span>
-          {usageStats.limit !== -1 && (
-            <span className="text-[10px] text-slate-400 font-semibold">
-              Today: {usageStats.usage} / {usageStats.limit} free operations used
-            </span>
-          )}
-        </div>
-      </div>
+    <div className="w-full h-full min-h-screen bg-slate-950 text-slate-100 p-8 pt-20 overflow-y-auto select-none dark relative">
+      {/* Floating Pink Circular Exit Cross Button */}
+      <button
+        onClick={handleExitWorkspace}
+        className="absolute top-4 left-4 z-50 flex items-center justify-center h-12 w-12 rounded-full bg-pink-600 hover:bg-pink-700 active:scale-95 transition-all text-white shadow-xl cursor-pointer border border-pink-500/20"
+        title="Exit / Go Back"
+      >
+        <X className="h-6 w-6" />
+      </button>
 
       {/* Paywall Banner */}
       {!isAllowed && (

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Zap, Moon, Sun, ExternalLink, User, LogOut, LayoutDashboard, BookOpen, Settings, Users, PenLine, Workflow, Crown } from 'lucide-react';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -48,7 +48,6 @@ function AppContent() {
   }, []);
 
   return (
-    <Router>
       <div className={darkMode ? 'dark min-h-screen bg-slate-950 text-slate-100 transition-colors duration-300' : 'min-h-screen bg-slate-50 text-slate-800 transition-colors duration-300'}>
         
         {/* Shared Navigation Header */}
@@ -351,14 +350,15 @@ function AppContent() {
           </div>
         </footer>
       </div>
-    </Router>
   );
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <Router>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </Router>
   );
 }

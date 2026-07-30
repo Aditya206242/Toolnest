@@ -101,6 +101,18 @@ export default function ImageCompressWorkspace({ onBack }) {
     }
   }, [focusedImageId, compressedDetails]);
 
+  // Toggle fullscreen layout class when queue changes
+  useEffect(() => {
+    if (imagesQueue.length > 0) {
+      document.documentElement.classList.add('hide-site-layout');
+    } else {
+      document.documentElement.classList.remove('hide-site-layout');
+    }
+    return () => {
+      document.documentElement.classList.remove('hide-site-layout');
+    };
+  }, [imagesQueue]);
+
   // Adjust zoom scales
   const adjustZoom = (delta) => {
     setZoom(prev => Math.min(8, Math.max(0.5, parseFloat((prev + delta).toFixed(2)))));
@@ -974,58 +986,63 @@ export default function ImageCompressWorkspace({ onBack }) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Header controls */}
-      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
-        <button
-          onClick={onBack}
-          className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-violet-500 transition border border-slate-200 dark:border-slate-800 px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900"
-          aria-label="Back to Image Category catalog"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to Catalog
-        </button>
-        <div className="text-right">
-          <span className="text-[10px] font-extrabold text-indigo-500 tracking-widest block uppercase">
-            Squoosh Experience optimization
-          </span>
-          {usageStats.limit !== -1 && (
-            <span className="text-[10px] text-slate-400 font-semibold">
-              Today: {usageStats.usage} / {usageStats.limit} operations used
-            </span>
-          )}
-        </div>
-      </div>
+  const handleExitWorkspace = () => {
+    if (imagesQueue.length > 0) {
+      setImagesQueue([]);
+    } else {
+      onBack();
+    }
+  };
 
-      {/* Paywall Banner */}
+  return (
+    <div className="w-full h-full relative bg-slate-950 text-slate-100 flex flex-col overflow-hidden select-none dark">
+      {/* Floating Pink Circular Exit Cross Button */}
+      <button
+        onClick={handleExitWorkspace}
+        className="absolute top-4 left-4 z-50 flex items-center justify-center h-12 w-12 rounded-full bg-pink-600 hover:bg-pink-700 active:scale-95 transition-all text-white shadow-xl cursor-pointer border border-pink-500/20"
+        title="Exit / Go Back"
+      >
+        <X className="h-6 w-6" />
+      </button>
+
+      {/* Paywall Banner floating */}
       {!isAllowed && (
-        <div className="p-5 rounded-3xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-start gap-4 text-sm leading-relaxed">
-          <AlertTriangle className="h-6 w-6 shrink-0 mt-0.5" />
+        <div className="absolute top-4 left-20 right-20 z-50 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-500 flex items-start gap-4 text-xs">
+          <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
           <div>
             <span className="font-bold block text-slate-200">Daily limit exceeded!</span>
-            <p className="mt-1 text-slate-400">
-              Please sign in or upgrade to premium to compress image files.
-            </p>
+            <p className="text-slate-450">Please sign in or upgrade to premium to compress image files.</p>
           </div>
         </div>
       )}
 
       {/* Conditional Layout Transition */}
       {imagesQueue.length === 0 ? (
-        // Upload Area view when no files uploaded
-        <div className="max-w-3xl mx-auto py-10">
-          {isAllowed && (
-            <ImageUpload
-              multiple={true}
-              onImagesSelected={handleImagesSelected}
-            />
-          )}
-
-          {errorMessage && (
-            <div className="mt-6 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center gap-3 text-sm font-semibold">
-              <AlertTriangle className="h-5 w-5" /> {errorMessage}
+        // Full screen upload layout
+        <div className="w-full h-full flex flex-col items-center justify-center bg-[radial-gradient(#ffffff04_1px,transparent_1px)] [background-size:16px_16px] p-6">
+          <div className="max-w-2xl w-full text-center space-y-6">
+            <h1 className="text-4xl font-black bg-gradient-to-r from-violet-400 via-indigo-400 to-sky-400 bg-clip-text text-transparent">
+              Compress Image
+            </h1>
+            <p className="text-slate-400 text-sm">
+              Locally compress and optimize JPEG, PNG, WEBP, and AVIF images using advanced client-side processing.
+            </p>
+            
+            <div className="w-full">
+              {isAllowed && (
+                <ImageUpload
+                  multiple={true}
+                  onImagesSelected={handleImagesSelected}
+                />
+              )}
             </div>
-          )}
+            
+            {errorMessage && (
+              <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center gap-3 text-sm font-semibold">
+                <AlertTriangle className="h-5 w-5" /> {errorMessage}
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         // 3-Column Squoosh-Style Professional Viewport
@@ -1055,10 +1072,10 @@ export default function ImageCompressWorkspace({ onBack }) {
           const metadataText = stripMetadata ? 'Stripped' : 'Preserved';
 
           return (
-            <div className="flex flex-col lg:flex-row gap-6 min-h-[75vh] w-full bg-slate-90/50 dark:bg-slate-950/20 rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-800">
+            <div className="flex flex-col lg:flex-row h-full w-full bg-slate-950 overflow-hidden">
 
               {/* 1. LEFT PANEL: Carousel Queue & Original details */}
-              <div className="lg:w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-5 flex flex-col gap-6 select-none justify-between">
+              <div className="lg:w-72 bg-slate-900 border-r border-slate-800 p-5 flex flex-col gap-6 select-none justify-between h-full overflow-y-auto">
                 <div className="space-y-6">
                   {/* File Upload zone trigger */}
                   <label className="group flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-slate-800 hover:border-violet-500 rounded-2xl p-4.5 cursor-pointer text-center bg-slate-50/50 dark:bg-slate-950/20 transition-colors">
@@ -1313,7 +1330,12 @@ export default function ImageCompressWorkspace({ onBack }) {
                   ref={viewportRef}
                   onPointerDown={handleViewportPointerDown}
                   onWheel={handleWheel}
-                  className="relative flex-1 overflow-hidden cursor-grab active:cursor-grabbing flex items-center justify-center bg-[radial-gradient(#ffffff04_1px,transparent_1px)] [background-size:16px_16px]"
+                  className="relative flex-1 overflow-hidden cursor-grab active:cursor-grabbing flex items-center justify-center"
+                  style={{
+                    backgroundImage: 'conic-gradient(#1e1e1e 25%, #151515 25% 50%, #1e1e1e 50% 75%, #151515 75%)',
+                    backgroundSize: '20px 20px',
+                    backgroundColor: '#151515'
+                  }}
                 >
                   <div
                     className="absolute w-full h-full flex items-center justify-center transition-transform duration-75"
@@ -1413,7 +1435,7 @@ export default function ImageCompressWorkspace({ onBack }) {
               </div>
 
               {/* 3. RIGHT PANEL: Compression Settings Controls */}
-              <div className="lg:w-80 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 p-5 flex flex-col gap-6 overflow-y-auto justify-between max-h-[80vh] lg:max-h-none">
+              <div className="lg:w-80 bg-slate-900 border-l border-slate-800 p-5 flex flex-col gap-6 overflow-y-auto justify-between h-full">
 
                 <div className="space-y-6">
                   {/* Format Selection buttons */}

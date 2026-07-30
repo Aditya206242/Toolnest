@@ -186,7 +186,21 @@ export default function ImageUpscaleWorkspace({ onBack }) {
         setErrorMessage('Upscale operation cancelled.');
       } else {
         console.error('[Preview Upscale Fail]', err);
-        setErrorMessage('Failed to process preview AI upscaling.');
+        let msg = 'Failed to process preview AI upscaling.';
+        if (err.response?.data instanceof Blob) {
+          try {
+            const text = await err.response.data.text();
+            const errorJson = JSON.parse(text);
+            msg = errorJson.message || msg;
+          } catch (e) {
+            // ignore parsing error
+          }
+        } else if (err.response?.data?.message) {
+          msg = err.response.data.message;
+        } else if (err.message) {
+          msg = err.message;
+        }
+        setErrorMessage(msg);
       }
       setProcessingStatus(prev => ({ ...prev, [img.id]: 'error' }));
       failProgressSimulation();

@@ -123,7 +123,22 @@ export default function ImageBgRemovalWorkspace({ onBack }) {
     } catch (err) {
       console.error('[Preview Fetch Fail]', err);
       setProcessingStatus(prev => ({ ...prev, [img.id]: 'error' }));
-      setErrorMessage('Failed to process preview background removal.');
+      
+      let msg = 'Failed to process preview background removal.';
+      if (err.response?.data instanceof Blob) {
+        try {
+          const text = await err.response.data.text();
+          const errorJson = JSON.parse(text);
+          msg = errorJson.message || msg;
+        } catch (e) {
+          // ignore parsing error
+        }
+      } else if (err.response?.data?.message) {
+        msg = err.response.data.message;
+      } else if (err.message) {
+        msg = err.message;
+      }
+      setErrorMessage(msg);
     } finally {
       setUploadPercent(0);
     }

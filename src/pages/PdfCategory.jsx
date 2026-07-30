@@ -211,45 +211,40 @@ export default function PdfCategory() {
         }}
       />
       <header className="mb-10 text-center md:text-left">
-        <h1 className="text-4xl font-black tracking-tight mb-2">PDF Document Tools</h1>
+        <h1 className="text-3xl font-black tracking-tight mb-2 text-slate-900 dark:text-slate-100">PDF Document Tools</h1>
         <p className="text-slate-500 dark:text-slate-400 text-sm max-w-2xl leading-relaxed">
-          Manipulate, merge, split, compress, and unlock PDF files locally inside your browser cache. Secure operations with zero latency.
+          Manipulate, merge, split, compress, and unlock PDF files locally inside your browser cache.
         </p>
       </header>
 
       {/* Grid listing all PDF tools */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {PDF_TOOLS.map((tool) => {
           const Icon = tool.icon;
           return (
             <div
               key={tool.id}
               onClick={() => setActiveTool(tool)}
-              className="group relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6.5 rounded-3xl hover:border-violet-500/50 hover:shadow-xl dark:hover:shadow-none dark:hover:bg-slate-900/80 transition-all cursor-pointer flex flex-col justify-between"
+              className="group relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-xl hover:border-violet-500/60 dark:hover:border-violet-500/40 transition duration-200 hover:shadow-md cursor-pointer flex flex-col justify-between"
             >
               <div>
-                <div className="flex items-center justify-between mb-5">
-                  <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-2xl text-slate-500 group-hover:bg-violet-600 group-hover:text-white transition-colors duration-300">
-                    <Icon className="h-6 w-6" />
+                <div className="flex items-center justify-between mb-4">
+                  <div className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 group-hover:bg-violet-600 group-hover:text-white transition-colors duration-200">
+                    <Icon className="h-5 w-5" />
                   </div>
                   {tool.badge && (
-                    <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-500/15 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-500/30">
+                    <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-500/15 text-violet-600 dark:text-violet-400 border border-violet-200 dark:border-violet-500/30">
                       {tool.badge}
                     </span>
                   )}
                 </div>
 
-                <h3 className="text-lg font-bold group-hover:text-violet-500 dark:group-hover:text-violet-400 transition-colors">
+                <h3 className="text-base font-extrabold text-slate-800 dark:text-slate-100 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
                   {tool.title}
                 </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-2.5 leading-relaxed">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
                   {tool.desc}
                 </p>
-              </div>
-
-              <div className="mt-8 pt-4 border-t border-slate-100 dark:border-slate-800 text-xs font-bold text-slate-400 group-hover:text-violet-500 dark:group-hover:text-violet-400 transition-colors flex justify-between items-center">
-                <span>LAUNCH UTILITY</span>
-                <span>➜</span>
               </div>
             </div>
           );

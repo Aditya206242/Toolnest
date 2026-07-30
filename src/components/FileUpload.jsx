@@ -173,7 +173,7 @@ export default function FileUpload({
         tabIndex={0}
         role="button"
         aria-label={`Upload zone. Drag & drop files or click to upload. Allowed format: ${acceptLabel}`}
-        className={`relative group border-2 border-dashed rounded-3xl p-8 text-center cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 ${
+        className={`relative group border-2 border-dashed rounded-3xl py-20 px-8 sm:py-28 text-center cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 ${
           isDragActive
             ? 'border-violet-600 bg-violet-500/10'
             : 'border-slate-300 dark:border-slate-800 hover:border-violet-500 hover:bg-slate-50 dark:hover:bg-slate-900/30'
@@ -188,20 +188,20 @@ export default function FileUpload({
           className="hidden"
         />
 
-        <div className="flex flex-col items-center justify-center gap-4">
-          <div className={`p-4 rounded-2xl transition-transform ${
+        <div className="flex flex-col items-center justify-center gap-5">
+          <div className={`p-5 rounded-2xl transition-transform ${
             isDragActive 
               ? 'bg-violet-600 text-white scale-110' 
               : 'bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 group-hover:scale-110'
           }`}>
-            <Upload className="h-7 w-7" />
+            <Upload className="h-10 w-10" />
           </div>
 
           <div>
-            <p className="font-bold text-base text-slate-700 dark:text-slate-200">
+            <p className="font-extrabold text-lg text-slate-800 dark:text-slate-100">
               Drag & Drop your files here, or <span className="text-violet-500 group-hover:underline">browse</span>
             </p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5 font-medium">
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 font-semibold">
               Supported formats: {acceptLabel} • Max Size: {(maxSize / (1024 * 1024)).toFixed(0)}MB
             </p>
           </div>

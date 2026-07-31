@@ -9,6 +9,44 @@ import ImageUpload from '../components/ImageUpload';
 import { useImage } from '../hooks/useImage';
 import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
+import JSZip from 'jszip';
+
+const convertBlobFormat = (blob, format) => {
+  if (format === 'png') return Promise.resolve(blob);
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Failed to get 2D context'));
+        return;
+      }
+      if (format === 'jpeg') {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      ctx.drawImage(img, 0, 0);
+      const mimeType = format === 'webp' ? 'image/webp' : 'image/jpeg';
+      canvas.toBlob((resultBlob) => {
+        if (resultBlob) {
+          resolve(resultBlob);
+        } else {
+          reject(new Error('Failed to convert image format'));
+        }
+      }, mimeType, 0.95);
+    };
+    img.onerror = (e) => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to load image for format conversion'));
+    };
+    img.src = url;
+  });
+};
 
 export default function ImageBgRemovalWorkspace({ onBack }) {
   const { downloadBlob } = useImage();
@@ -23,6 +61,7 @@ export default function ImageBgRemovalWorkspace({ onBack }) {
   const [hairRefinement, setHairRefinement] = useState(true);
   const [shadowPreservation, setShadowPreservation] = useState(true);
   const [autoCrop, setAutoCrop] = useState(false);
+  const [downloadFormat, setDownloadFormat] = useState('png'); // 'png' | 'webp' | 'jpeg'
 
   // Compare slider state
   const [sliderPct, setSliderPct] = useState(50); // 0 to 100
@@ -212,19 +251,37 @@ export default function ImageBgRemovalWorkspace({ onBack }) {
           }
         });
 
-        downloadBlob(response.data, `no-bg_batch_${Date.now()}.zip`);
-        setSuccessMessage('Batch processed successfully! ZIP downloaded.');
+        if (downloadFormat === 'png') {
+          downloadBlob(response.data, `no-bg_batch_${Date.now()}.zip`);
+        } else {
+          // Unzip, convert each, and re-zip
+          const zip = await JSZip.loadAsync(response.data);
+          const newZip = new JSZip();
+          
+          for (const [filename, fileObj] of Object.entries(zip.files)) {
+            if (fileObj.dir) continue;
+            
+            const fileBlob = await fileObj.async('blob');
+            const convertedBlob = await convertBlobFormat(fileBlob, downloadFormat);
+            
+            const baseName = filename.substring(0, filename.lastIndexOf('.')) || filename;
+            const newFilename = `${baseName}.${downloadFormat === 'jpeg' ? 'jpg' : downloadFormat}`;
+            newZip.file(newFilename, convertedBlob);
+          }
+          
+          const newZipBlob = await newZip.generateAsync({ type: 'blob' });
+          downloadBlob(newZipBlob, `no-bg_batch_${Date.now()}.zip`);
+        }
+        setSuccessMessage(`Batch processed successfully! ZIP containing ${downloadFormat.toUpperCase()} files downloaded.`);
       } else {
         if (!activeImage) throw new Error('No active image selected.');
         
-        // If preview is already loaded, we can download it directly from local blob to save network!
+        let finalBlob;
         const localUrl = processedPreviews[activeImage.id];
+        
         if (localUrl) {
           const res = await fetch(localUrl);
-          const blob = await res.blob();
-          const nameWithoutExt = activeImage.name.substring(0, activeImage.name.lastIndexOf('.')) || activeImage.name;
-          downloadBlob(blob, `no-bg_${nameWithoutExt}.png`);
-          setSuccessMessage('Transparent image downloaded successfully!');
+          finalBlob = await res.blob();
         } else {
           formData.append('file', activeImage.file);
           const response = await api.post('/image/remove-background', formData, {
@@ -235,10 +292,17 @@ export default function ImageBgRemovalWorkspace({ onBack }) {
               setUploadPercent(percent);
             }
           });
-          const nameWithoutExt = activeImage.name.substring(0, activeImage.name.lastIndexOf('.')) || activeImage.name;
-          downloadBlob(response.data, `no-bg_${nameWithoutExt}.png`);
-          setSuccessMessage('Transparent image downloaded successfully!');
+          finalBlob = response.data;
         }
+
+        const convertedBlob = await convertBlobFormat(finalBlob, downloadFormat);
+        const nameWithoutExt = activeImage.name.substring(0, activeImage.name.lastIndexOf('.')) || activeImage.name;
+        const extension = downloadFormat === 'jpeg' ? 'jpg' : downloadFormat;
+        downloadBlob(convertedBlob, `no-bg_${nameWithoutExt}.${extension}`);
+        
+        const formatLabel = downloadFormat === 'jpeg' ? 'JPEG' : downloadFormat.toUpperCase();
+        const successLabel = downloadFormat === 'jpeg' ? 'JPEG image downloaded successfully!' : `${formatLabel} image downloaded successfully!`;
+        setSuccessMessage(successLabel);
       }
 
       // Log metric
@@ -262,6 +326,7 @@ export default function ImageBgRemovalWorkspace({ onBack }) {
     setShadowPreservation(true);
     setAutoCrop(false);
     setSliderPct(50);
+    setDownloadFormat('png');
   };
 
   const checkerboardStyle = {
@@ -621,30 +686,50 @@ export default function ImageBgRemovalWorkspace({ onBack }) {
               />
             </div>
 
+            {/* Download Format selection */}
+            <div className="border-t border-slate-100 dark:border-slate-850 pt-3 pb-1">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-2">Download Format</span>
+              <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 dark:bg-slate-950 rounded-xl border border-slate-200/50 dark:border-slate-850">
+                {['png', 'webp', 'jpeg'].map((fmt) => (
+                  <button
+                    key={fmt}
+                    onClick={() => setDownloadFormat(fmt)}
+                    className={`py-1.5 rounded-lg text-xs font-bold transition-all uppercase cursor-pointer ${
+                      downloadFormat === fmt
+                        ? 'bg-violet-600 text-white shadow-sm'
+                        : 'text-slate-500 hover:text-slate-750 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    {fmt}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Action buttons */}
             <div className="border-t border-slate-100 dark:border-slate-855 pt-4 space-y-2.5">
               <button
                 onClick={() => handleExecuteDownload(false)}
                 disabled={isProcessingBatch || imagesQueue.length === 0 || !isAllowed || status !== 'done'}
-                className="w-full py-3 rounded-2xl bg-violet-600 hover:bg-violet-750 disabled:opacity-40 text-white font-bold text-sm shadow-lg shadow-violet-600/20 transition flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-2xl bg-violet-600 hover:bg-violet-750 disabled:opacity-40 text-white font-bold text-sm shadow-lg shadow-violet-600/20 transition flex items-center justify-center gap-2 cursor-pointer"
               >
-                <Download className="h-4 w-4" /> Download PNG
+                <Download className="h-4 w-4" /> Download {downloadFormat.toUpperCase()}
               </button>
 
               {imagesQueue.length > 1 && (
                 <button
                   onClick={() => handleExecuteDownload(true)}
                   disabled={isProcessingBatch || !isAllowed}
-                  className="w-full py-3 rounded-2xl bg-indigo-650 hover:bg-indigo-700 disabled:opacity-40 text-white font-bold text-sm shadow-lg shadow-indigo-600/20 transition flex items-center justify-center gap-2 border border-indigo-600/50"
+                  className="w-full py-3 rounded-2xl bg-indigo-650 hover:bg-indigo-700 disabled:opacity-40 text-white font-bold text-sm shadow-lg shadow-indigo-600/20 transition flex items-center justify-center gap-2 border border-indigo-600/50 cursor-pointer"
                 >
-                  <Layers className="h-4 w-4" /> Batch Process (ZIP)
+                  <Layers className="h-4 w-4" /> Batch Process ({downloadFormat.toUpperCase()} ZIP)
                 </button>
               )}
 
               <button
                 onClick={handleReset}
                 disabled={imagesQueue.length === 0}
-                className="w-full py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-950 font-semibold text-xs transition"
+                className="w-full py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-950 font-semibold text-xs transition cursor-pointer"
               >
                 Reset Configuration
               </button>

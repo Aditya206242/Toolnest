@@ -11,14 +11,58 @@ import { useAuth } from '../context/AuthContext';
 import api from '../utils/api';
 import JSZip from 'jszip';
 
-const convertBlobFormat = (blob, format) => {
-  if (format === 'png') return Promise.resolve(blob);
+const trimCanvas = (canvas) => {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+  
+  const width = canvas.width;
+  const height = canvas.height;
+  const imgData = ctx.getImageData(0, 0, width, height);
+  const data = imgData.data;
+  
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const alpha = data[(y * width + x) * 4 + 3];
+      if (alpha > 0) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  
+  if (maxX === -1 || maxY === -1) {
+    return canvas;
+  }
+  
+  const croppedWidth = maxX - minX + 1;
+  const croppedHeight = maxY - minY + 1;
+  
+  const croppedCanvas = document.createElement('canvas');
+  croppedCanvas.width = croppedWidth;
+  croppedCanvas.height = croppedHeight;
+  const croppedCtx = croppedCanvas.getContext('2d');
+  if (!croppedCtx) return canvas;
+  
+  croppedCtx.drawImage(canvas, minX, minY, croppedWidth, croppedHeight, 0, 0, croppedWidth, croppedHeight);
+  return croppedCanvas;
+};
+
+const convertBlobFormat = (blob, format, shouldCrop = false) => {
+  if (format === 'png' && !shouldCrop) return Promise.resolve(blob);
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(blob);
     img.onload = () => {
       URL.revokeObjectURL(url);
-      const canvas = document.createElement('canvas');
+      
+      let canvas = document.createElement('canvas');
       canvas.width = img.naturalWidth;
       canvas.height = img.naturalHeight;
       const ctx = canvas.getContext('2d');
@@ -26,12 +70,29 @@ const convertBlobFormat = (blob, format) => {
         reject(new Error('Failed to get 2D context'));
         return;
       }
-      if (format === 'jpeg') {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      }
+      
       ctx.drawImage(img, 0, 0);
-      const mimeType = format === 'webp' ? 'image/webp' : 'image/jpeg';
+      
+      if (shouldCrop) {
+        canvas = trimCanvas(canvas);
+      }
+      
+      if (format === 'jpeg') {
+        const jpegCanvas = document.createElement('canvas');
+        jpegCanvas.width = canvas.width;
+        jpegCanvas.height = canvas.height;
+        const jpegCtx = jpegCanvas.getContext('2d');
+        if (!jpegCtx) {
+          reject(new Error('Failed to get JPEG 2D context'));
+          return;
+        }
+        jpegCtx.fillStyle = '#ffffff';
+        jpegCtx.fillRect(0, 0, jpegCanvas.width, jpegCanvas.height);
+        jpegCtx.drawImage(canvas, 0, 0);
+        canvas = jpegCanvas;
+      }
+      
+      const mimeType = format === 'webp' ? 'image/webp' : (format === 'jpeg' ? 'image/jpeg' : 'image/png');
       canvas.toBlob((resultBlob) => {
         if (resultBlob) {
           resolve(resultBlob);
@@ -68,9 +129,9 @@ export default function ImageBgRemovalWorkspace({ onBack }) {
   const [isSliding, setIsSliding] = useState(false);
   const sliderRef = useRef(null);
 
-  // Processed preview cache
-  const [processedPreviews, setProcessedPreviews] = useState({}); // { [imageId]: objectUrl }
-  const [processingStatus, setProcessingStatus] = useState({}); // { [imageId]: 'idle'|'processing'|'done'|'error' }
+  // Processed preview cache (using a settings-dependent cache key to update dynamically)
+  const [processedPreviews, setProcessedPreviews] = useState({}); // { [cacheKey]: objectUrl }
+  const [processingStatus, setProcessingStatus] = useState({}); // { [cacheKey]: 'idle'|'processing'|'done'|'error' }
 
   // Limits
   const [isAllowed, setIsAllowed] = useState(true);
@@ -122,20 +183,28 @@ export default function ImageBgRemovalWorkspace({ onBack }) {
     }
   };
 
-  // Automatically fetch processed background removal preview on active image change
+  const activeCacheKey = activeImage 
+    ? `${activeImage.id}_s:${edgeSmoothing}_h:${hairRefinement}_sh:${shadowPreservation}`
+    : '';
+
+  const status = activeImage ? processingStatus[activeCacheKey] || 'idle' : 'idle';
+  const processedUrl = activeImage ? processedPreviews[activeCacheKey] : null;
+
+  // Automatically fetch processed background removal preview on active image or setting changes
   useEffect(() => {
     if (!activeImage) return;
 
-    // Skip if already processed with current settings
-    if (processedPreviews[activeImage.id]) {
+    const cacheKey = `${activeImage.id}_s:${edgeSmoothing}_h:${hairRefinement}_sh:${shadowPreservation}`;
+    if (processedPreviews[cacheKey]) {
       return;
     }
 
     fetchPreview(activeImage);
-  }, [activeImage, edgeSmoothing, autoCrop]);
+  }, [activeImage, edgeSmoothing, hairRefinement, shadowPreservation]);
 
   const fetchPreview = async (img) => {
-    setProcessingStatus(prev => ({ ...prev, [img.id]: 'processing' }));
+    const cacheKey = `${img.id}_s:${edgeSmoothing}_h:${hairRefinement}_sh:${shadowPreservation}`;
+    setProcessingStatus(prev => ({ ...prev, [cacheKey]: 'processing' }));
     setUploadPercent(0);
     setErrorMessage('');
 
@@ -145,7 +214,7 @@ export default function ImageBgRemovalWorkspace({ onBack }) {
       formData.append('edgeSmoothing', edgeSmoothing ? 'true' : 'false');
       formData.append('hairRefinement', hairRefinement ? 'true' : 'false');
       formData.append('shadowPreservation', shadowPreservation ? 'true' : 'false');
-      formData.append('autoCrop', autoCrop ? 'true' : 'false');
+      formData.append('autoCrop', 'false'); // Always false for preview to keep compare slider aligned!
 
       const response = await api.post('/image/remove-background', formData, {
         responseType: 'blob',
@@ -157,11 +226,11 @@ export default function ImageBgRemovalWorkspace({ onBack }) {
       });
 
       const processedUrl = URL.createObjectURL(response.data);
-      setProcessedPreviews(prev => ({ ...prev, [img.id]: processedUrl }));
-      setProcessingStatus(prev => ({ ...prev, [img.id]: 'done' }));
+      setProcessedPreviews(prev => ({ ...prev, [cacheKey]: processedUrl }));
+      setProcessingStatus(prev => ({ ...prev, [cacheKey]: 'done' }));
     } catch (err) {
       console.error('[Preview Fetch Fail]', err);
-      setProcessingStatus(prev => ({ ...prev, [img.id]: 'error' }));
+      setProcessingStatus(prev => ({ ...prev, [cacheKey]: 'error' }));
       
       let msg = 'Failed to process preview background removal.';
       if (err.response?.data instanceof Blob) {
@@ -207,12 +276,17 @@ export default function ImageBgRemovalWorkspace({ onBack }) {
   const removeImage = (id) => {
     const updatedQueue = imagesQueue.filter(img => img.id !== id);
     setImagesQueue(updatedQueue);
-    if (processedPreviews[id]) {
-      URL.revokeObjectURL(processedPreviews[id]);
-      const copy = { ...processedPreviews };
-      delete copy[id];
-      setProcessedPreviews(copy);
-    }
+    
+    // Revoke all preview URLs that match the prefix of the removed image
+    const copy = { ...processedPreviews };
+    Object.keys(copy).forEach(key => {
+      if (key.startsWith(`${id}_`)) {
+        URL.revokeObjectURL(copy[key]);
+        delete copy[key];
+      }
+    });
+    setProcessedPreviews(copy);
+
     if (updatedQueue.length > 0) {
       if (activeImage.id === id) {
         setActiveImage(updatedQueue[0]);
@@ -235,7 +309,7 @@ export default function ImageBgRemovalWorkspace({ onBack }) {
       formData.append('edgeSmoothing', edgeSmoothing ? 'true' : 'false');
       formData.append('hairRefinement', hairRefinement ? 'true' : 'false');
       formData.append('shadowPreservation', shadowPreservation ? 'true' : 'false');
-      formData.append('autoCrop', autoCrop ? 'true' : 'false');
+      formData.append('autoCrop', 'false'); // Always false on backend, we crop on client-side during download/zip compilation
 
       if (processAll) {
         imagesQueue.forEach((img) => {
@@ -251,7 +325,7 @@ export default function ImageBgRemovalWorkspace({ onBack }) {
           }
         });
 
-        if (downloadFormat === 'png') {
+        if (downloadFormat === 'png' && !autoCrop) {
           downloadBlob(response.data, `no-bg_batch_${Date.now()}.zip`);
         } else {
           // Unzip, convert each, and re-zip
@@ -262,7 +336,7 @@ export default function ImageBgRemovalWorkspace({ onBack }) {
             if (fileObj.dir) continue;
             
             const fileBlob = await fileObj.async('blob');
-            const convertedBlob = await convertBlobFormat(fileBlob, downloadFormat);
+            const convertedBlob = await convertBlobFormat(fileBlob, downloadFormat, autoCrop);
             
             const baseName = filename.substring(0, filename.lastIndexOf('.')) || filename;
             const newFilename = `${baseName}.${downloadFormat === 'jpeg' ? 'jpg' : downloadFormat}`;
@@ -277,7 +351,7 @@ export default function ImageBgRemovalWorkspace({ onBack }) {
         if (!activeImage) throw new Error('No active image selected.');
         
         let finalBlob;
-        const localUrl = processedPreviews[activeImage.id];
+        const localUrl = processedPreviews[activeCacheKey];
         
         if (localUrl) {
           const res = await fetch(localUrl);
@@ -295,7 +369,7 @@ export default function ImageBgRemovalWorkspace({ onBack }) {
           finalBlob = response.data;
         }
 
-        const convertedBlob = await convertBlobFormat(finalBlob, downloadFormat);
+        const convertedBlob = await convertBlobFormat(finalBlob, downloadFormat, autoCrop);
         const nameWithoutExt = activeImage.name.substring(0, activeImage.name.lastIndexOf('.')) || activeImage.name;
         const extension = downloadFormat === 'jpeg' ? 'jpg' : downloadFormat;
         downloadBlob(convertedBlob, `no-bg_${nameWithoutExt}.${extension}`);
@@ -335,9 +409,6 @@ export default function ImageBgRemovalWorkspace({ onBack }) {
     backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
     backgroundColor: '#f8fafc'
   };
-
-  const status = activeImage ? processingStatus[activeImage.id] || 'idle' : 'idle';
-  const processedUrl = activeImage ? processedPreviews[activeImage.id] : null;
 
   const handleExitWorkspace = () => {
     if (imagesQueue.length > 0) {
